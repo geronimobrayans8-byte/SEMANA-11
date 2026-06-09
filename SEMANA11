@@ -1,1 +1,79 @@
+import numpy as np
+import sympy as sp
+from tabulate import tabulate
 
+# --- 1. Definición de los Métodos Numéricos ---
+
+def trapecio_compuesto(f, a, b, N):
+    h = (b - a) / N
+    x = np.linspace(a, b, N + 1)
+    y = f(x)
+    return (h / 2) * (y[0] + 2 * np.sum(y[1:-1]) + y[-1])
+
+def simpson_13_compuesto(f, a, b, N):
+    if N % 2 != 0: N += 1 # N debe ser par
+    h = (b - a) / N
+    x = np.linspace(a, b, N + 1)
+    y = f(x)
+    return (h / 3) * (y[0] + 4 * np.sum(y[1:-1:2]) + 2 * np.sum(y[2:-2:2]) + y[-1])
+
+def simpson_38_compuesto(f, a, b, N):
+    if N % 3 != 0: N += (3 - N % 3) # N debe ser múltiplo de 3
+    h = (b - a) / N
+    x = np.linspace(a, b, N + 1)
+    y = f(x)
+    suma = y[0] + y[-1]
+    for i in range(1, N):
+        if i % 3 == 0: suma += 2 * y[i]
+        else: suma += 3 * y[i]
+    return (3 * h / 8) * suma
+
+def gauss_legendre(f, a, b, n):
+    # Cálculo algorítmico de raíces y pesos para la cuadratura
+    raices, pesos = np.polynomial.legendre.leggauss(n)
+    # Cambio de variable del intervalo [-1, 1] al intervalo [a, b]
+    t = 0.5 * (raices + 1) * (b - a) + a
+    return 0.5 * (b - a) * np.sum(pesos * f(t))
+
+# --- 2. Ingreso y Procesamiento de Datos ---
+
+x_sym = sp.Symbol('x')
+print("Ejemplos de ingreso: 1/sqrt(2*pi)*exp(-x**2/2) | cos(x**2) | x**5 - 2*x**3 + 4")
+expr_str = input("Ingrese la función f(x): ")
+a = float(input("Límite inferior a: "))
+b = float(input("Límite superior b: "))
+
+# Convertir string a expresión matemática
+expr = sp.sympify(expr_str)
+f_num = sp.lambdify(x_sym, expr, 'numpy')
+
+# Lógica para identificar polinomios y elegir 'n'
+if expr.is_polynomial():
+    grado = sp.degree(expr, gen=x_sym)
+    # n óptimo usando el teorema: 2n - 1 = grado
+    n_gauss = int(np.ceil((grado + 1) / 2))
+    print(f"\n[!] Función polinómica de grado {grado} detectada. Se usará n = {n_gauss} para Gauss-Legendre.")
+else:
+    n_gauss = 5
+    print("\n[!] Función no polinómica. Se usará n = 5 para Gauss-Legendre.")
+
+# --- 3. Evaluaciones y Tabla de Resultados ---
+
+N_nc = 12 # Nodos para Newton-Cotes
+# Valor exacto para calcular el error absoluto
+val_exacto = float(sp.integrate(expr, (x_sym, a, b)).evalf())
+
+resultados = [
+    ["Trapecio Compuesto", N_nc + 1, trapecio_compuesto(f_num, a, b, N_nc)],
+    ["Simpson 1/3 Compuesto", N_nc + 1, simpson_13_compuesto(f_num, a, b, N_nc)],
+    ["Simpson 3/8 Compuesto", N_nc + 1, simpson_38_compuesto(f_num, a, b, N_nc)],
+    ["Gauss-Legendre", n_gauss, gauss_legendre(f_num, a, b, n_gauss)]
+]
+
+tabla = []
+for nombre, puntos, aprox in resultados:
+    error = abs(val_exacto - aprox)
+    tabla.append([nombre, puntos, f"{aprox:.8f}", f"{error:.2e}"])
+
+print("\n")
+print(tabulate(tabla, headers=["Método", "Puntos F(x)", "Aproximación", "Error Absoluto"], tablefmt="presto"))
